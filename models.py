@@ -1,18 +1,7 @@
 import enum
 from sqlalchemy import (
-    Column,
-    Integer,
-    BigInteger,
-    String,
-    Boolean,
-    Date,
-    DateTime,
-    Text,
-    Numeric,
-    ForeignKey,
-    Enum as SAEnum,
-    Table,
-    func,
+    Column, Integer, BigInteger, String, Boolean, Date, DateTime, Text, Numeric,
+    ForeignKey, Enum as SAEnum, Table, func
 )
 from sqlalchemy.orm import relationship
 from database import Base
@@ -34,7 +23,7 @@ class EstadoPlanta(enum.Enum):
     enferma = "enferma"
     muerta = "muerta"
     podada = "podada"
-    en_observacion = "en observacion"  # ojo: en la BD es con espacio
+    en_observacion = "en observacion"  # en DB es con espacio
 
 
 class TipoImagen(enum.Enum):
@@ -56,26 +45,13 @@ class TipoRevision(enum.Enum):
 
 
 # ==========================================================
-# TABLA PIVOTE (revision_trabajador) (igual que en tu dump)
+# TABLA PIVOTE revision_trabajador
 # ==========================================================
-
 revision_trabajador = Table(
     "revision_trabajador",
     Base.metadata,
-    Column(
-        "revision_id",
-        Integer,
-        ForeignKey("revision.id", ondelete="CASCADE"),
-        primary_key=True,
-        nullable=False,
-    ),
-    Column(
-        "trabajador_id",
-        Integer,
-        ForeignKey("trabajador.id", ondelete="CASCADE"),
-        primary_key=True,
-        nullable=False,
-    ),
+    Column("revision_id", Integer, ForeignKey("revision.id", ondelete="CASCADE"), primary_key=True),
+    Column("trabajador_id", Integer, ForeignKey("trabajador.id", ondelete="CASCADE"), primary_key=True),
 )
 
 
@@ -92,12 +68,7 @@ class Finca(Base):
     tamano_hectareas = Column(Numeric(10, 2), nullable=True)
     fecha_creacion = Column(DateTime, server_default=func.now(), nullable=True)
 
-    sectores = relationship(
-        "Sector",
-        back_populates="finca",
-        cascade="all, delete-orphan",
-        passive_deletes=True,
-    )
+    sectores = relationship("Sector", back_populates="finca", cascade="all, delete-orphan", passive_deletes=True)
 
 
 class Sector(Base):
@@ -113,19 +84,8 @@ class Sector(Base):
 
     finca = relationship("Finca", back_populates="sectores")
 
-    plantas = relationship(
-        "Planta",
-        back_populates="sector",
-        cascade="all, delete-orphan",
-        passive_deletes=True,
-    )
-
-    revisiones = relationship(
-        "Revision",
-        back_populates="sector",
-        cascade="all, delete-orphan",
-        passive_deletes=True,
-    )
+    plantas = relationship("Planta", back_populates="sector", cascade="all, delete-orphan", passive_deletes=True)
+    revisiones = relationship("Revision", back_populates="sector", cascade="all, delete-orphan", passive_deletes=True)
 
 
 class Planta(Base):
@@ -139,11 +99,8 @@ class Planta(Base):
     procedencia = Column(String(150), nullable=True)
     fecha_nacimiento = Column(Date, nullable=True)
 
-    estado = Column(
-        SAEnum(EstadoPlanta, name="estado_planta", native_enum=True),
-        nullable=False,
-        server_default=EstadoPlanta.viva.value,
-    )
+    estado = Column(SAEnum(EstadoPlanta, name="estado_planta", native_enum=True),
+                    nullable=False, server_default=EstadoPlanta.viva.value)
 
     observaciones = Column(Text, nullable=True)
     fecha_plantacion = Column(Date, nullable=True)
@@ -155,13 +112,7 @@ class Planta(Base):
     certificado_yema = Column(Boolean, nullable=True, server_default="false")
 
     sector = relationship("Sector", back_populates="plantas")
-
-    revisiones_unitarias = relationship(
-        "RevisionUnitaria",
-        back_populates="planta",
-        cascade="all, delete-orphan",
-        passive_deletes=True,
-    )
+    revisiones_unitarias = relationship("RevisionUnitaria", back_populates="planta", passive_deletes=True)
 
 
 class Usuario(Base):
@@ -187,11 +138,7 @@ class Usuario(Base):
     updated_at = Column(DateTime, server_default=func.now(), nullable=True)
     last_login = Column(DateTime, nullable=True)
 
-    revisiones = relationship(
-        "Revision",
-        back_populates="usuario",
-        passive_deletes=True,
-    )
+    revisiones = relationship("Revision", back_populates="usuario", passive_deletes=True)
 
 
 class Revision(Base):
@@ -202,10 +149,7 @@ class Revision(Base):
 
     fecha_revision = Column(Date, nullable=False)
 
-    tipo = Column(
-        SAEnum(TipoRevision, name="tipo_revision", native_enum=True),
-        nullable=False,
-    )
+    tipo = Column(SAEnum(TipoRevision, name="tipo_revision", native_enum=True), nullable=False)
 
     observaciones = Column(Text, nullable=True)
     comentario = Column(Text, nullable=True)
@@ -215,18 +159,8 @@ class Revision(Base):
     sector = relationship("Sector", back_populates="revisiones")
     usuario = relationship("Usuario", back_populates="revisiones")
 
-    trabajadores = relationship(
-        "Trabajador",
-        secondary=revision_trabajador,
-        back_populates="revisiones",
-    )
-
-    unidades = relationship(
-        "RevisionUnitaria",
-        back_populates="revision",
-        cascade="all, delete-orphan",
-        passive_deletes=True,
-    )
+    trabajadores = relationship("Trabajador", secondary=revision_trabajador, back_populates="revisiones")
+    unidades = relationship("RevisionUnitaria", back_populates="revision", cascade="all, delete-orphan", passive_deletes=True)
 
 
 class RevisionUnitaria(Base):
@@ -237,10 +171,7 @@ class RevisionUnitaria(Base):
 
     arbol_numero = Column(Integer, nullable=False)
 
-    estado = Column(
-        SAEnum(EstadoArbol, name="estado_arbol", native_enum=True),
-        nullable=False,
-    )
+    estado = Column(SAEnum(EstadoArbol, name="estado_arbol", native_enum=True), nullable=False)
 
     observaciones = Column(Text, nullable=True)
     planta_id = Column(BigInteger, ForeignKey("planta.id", ondelete="CASCADE"), nullable=True)
@@ -249,33 +180,21 @@ class RevisionUnitaria(Base):
     revision = relationship("Revision", back_populates="unidades")
     planta = relationship("Planta", back_populates="revisiones_unitarias")
 
-    imagenes = relationship(
-        "Imagen",
-        back_populates="revision_unitaria",
-        cascade="all, delete-orphan",
-        passive_deletes=True,
-    )
+    imagenes = relationship("Imagen", back_populates="revision_unitaria", cascade="all, delete-orphan", passive_deletes=True)
 
 
 class Imagen(Base):
     __tablename__ = "imagen"
 
     id = Column(BigInteger, primary_key=True, index=True)
-    revision_unitaria_id = Column(
-        BigInteger,
-        ForeignKey("revision_unitaria.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
+    revision_unitaria_id = Column(BigInteger, ForeignKey("revision_unitaria.id", ondelete="CASCADE"),
+                                  nullable=False, index=True)
 
     nombre_archivo = Column(String(255), nullable=False)
     url = Column(Text, nullable=False)
 
-    tipo = Column(
-        SAEnum(TipoImagen, name="tipo_imagen", native_enum=True),
-        nullable=True,
-        server_default=TipoImagen.otro.value,
-    )
+    tipo = Column(SAEnum(TipoImagen, name="tipo_imagen", native_enum=True),
+                  nullable=True, server_default=TipoImagen.otro.value)
 
     descripcion = Column(Text, nullable=True)
     fecha_creacion = Column(DateTime, server_default=func.now(), nullable=True)
@@ -300,8 +219,4 @@ class Trabajador(Base):
     activo = Column(Boolean, nullable=True, server_default="true")
     fecha_creacion = Column(DateTime, server_default=func.now(), nullable=True)
 
-    revisiones = relationship(
-        "Revision",
-        secondary=revision_trabajador,
-        back_populates="trabajadores",
-    )
+    revisiones = relationship("Revision", secondary=revision_trabajador, back_populates="trabajadores")
