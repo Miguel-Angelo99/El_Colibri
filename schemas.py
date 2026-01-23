@@ -1,88 +1,16 @@
 from pydantic import BaseModel, EmailStr, Field
-from datetime import datetime
 from typing import Optional, List
+from datetime import datetime, date
+from decimal import Decimal
 
 
-class UsuarioBase(BaseModel):
-    email: EmailStr
-
-
-class UsuarioCreate(UsuarioBase):
-    password: str
-
-
-class UsuarioResponse(UsuarioBase):
-    id: int
-    is_active: bool
-    email_verified: bool
-    role: str
-    permissions: Optional[List[str]]
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
-
-
-# ===== Revisiones =====
-
-class RevisionCreateResponse(BaseModel):
-    revision_id: int
-    total: int
-    esperadas: int
-    estado: str
-
-
-class RevisionImagenOut(BaseModel):
-    id: int
-    idx: int
-    numero_etiqueta: Optional[str] = None
-    estado: str
-    storage_key: str
-
-    class Config:
-        from_attributes = True
-
-
-class RevisionImagenListResponse(BaseModel):
-    revision_id: int
-    total: int
-    esperadas: int
-    estado: str
-    imagenes: List[RevisionImagenOut]
-
-
-class RevisionValidarResponse(BaseModel):
-    revision_id: int
-    total: int
-    esperadas: int
-    ok: bool
-
-
-class AsignacionNumero(BaseModel):
-    image_id: int
-    numero: str = Field(..., min_length=1, max_length=5, pattern=r"^\d{1,5}$")
-
-
-class RevisionFinalizarRequest(BaseModel):
-    asignaciones: List[AsignacionNumero]
-
-
-class RevisionFinalizarResponse(BaseModel):
-    revision_id: int
-    estado: str
-    total: int
-    esperadas: int
-    numeros: List[str]
-
-# ===== FINCAS =====
-
-from typing import Optional, List
-
+# =========================
+# FINCA
+# =========================
 class FincaBase(BaseModel):
     nombre: str
     ubicacion: Optional[str] = None
-    estado: Optional[str] = None
-    owner: Optional[str] = None
+    tamano_hectareas: Optional[Decimal] = None
 
 
 class FincaCreate(FincaBase):
@@ -92,23 +20,26 @@ class FincaCreate(FincaBase):
 class FincaUpdate(BaseModel):
     nombre: Optional[str] = None
     ubicacion: Optional[str] = None
-    estado: Optional[str] = None
-    owner: Optional[str] = None
+    tamano_hectareas: Optional[Decimal] = None
 
 
 class FincaResponse(FincaBase):
     id: int
+    fecha_creacion: Optional[datetime] = None
+
     class Config:
         from_attributes = True
 
 
-# ===== SECTORES =====
-
+# =========================
+# SECTOR
+# =========================
 class SectorBase(BaseModel):
     finca_id: int
     nombre: str
-    num_plantas: int
-    ubicacion: Optional[str] = None
+    descripcion: Optional[str] = None
+    area_hectareas: Optional[Decimal] = None
+    plantas_cantidad: Optional[Decimal] = None
 
 
 class SectorCreate(SectorBase):
@@ -117,11 +48,54 @@ class SectorCreate(SectorBase):
 
 class SectorUpdate(BaseModel):
     nombre: Optional[str] = None
-    num_plantas: Optional[int] = None
-    ubicacion: Optional[str] = None
+    descripcion: Optional[str] = None
+    area_hectareas: Optional[Decimal] = None
+    plantas_cantidad: Optional[Decimal] = None
 
 
 class SectorResponse(SectorBase):
     id: int
+
+    class Config:
+        from_attributes = True
+
+
+# =========================
+# USUARIO
+# =========================
+class UsuarioBase(BaseModel):
+    email: EmailStr
+
+
+class UsuarioCreate(UsuarioBase):
+    password: str = Field(..., min_length=6)
+
+
+class UsuarioResponse(UsuarioBase):
+    id: int
+    is_active: bool
+    email_verified: bool
+    role: str
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+# =========================
+# REVISION (BÁSICO)
+# =========================
+class RevisionCreate(BaseModel):
+    sector_id: int
+    fecha_revision: date
+    tipo: str  # debe ser un valor EXACTO del enum tipo_revision (ej "Revision mensual")
+    observaciones: Optional[str] = None
+    comentario: Optional[str] = None
+    usuario_id: Optional[int] = None
+
+
+class RevisionResponse(RevisionCreate):
+    id: int
+
     class Config:
         from_attributes = True
