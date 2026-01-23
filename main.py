@@ -42,7 +42,3 @@ app.include_router(usuarios_router)
 @app.get("/")
 def root():
     return {"status": "ok"}
-
-
-
-
