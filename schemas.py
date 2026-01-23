@@ -69,6 +69,19 @@ class UsuarioBase(BaseModel):
 
 class UsuarioCreate(UsuarioBase):
     password: str = Field(..., min_length=6)
+    # opcional para pruebas/admin, si quieres puedes quitarlo luego
+    role: Optional[str] = Field(default="user", max_length=50)
+
+
+class UsuarioUpdate(BaseModel):
+    email: Optional[EmailStr] = None
+    is_active: Optional[bool] = None
+    email_verified: Optional[bool] = None
+    role: Optional[str] = Field(default=None, max_length=50)
+
+
+class UsuarioPasswordUpdate(BaseModel):
+    new_password: str = Field(..., min_length=6, max_length=128)
 
 
 class UsuarioResponse(UsuarioBase):
@@ -77,9 +90,12 @@ class UsuarioResponse(UsuarioBase):
     email_verified: bool
     role: str
     created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    last_login: Optional[datetime] = None
 
     class Config:
         from_attributes = True
+
 
 
 # =========================
@@ -134,4 +150,15 @@ class TrabajadorResponse(TrabajadorBase):
 
     class Config:
         from_attributes = True
+
+
+
+
+
+
+
+
+
+
+
 
