@@ -1,4 +1,3 @@
-# crud_fincas.py
 from sqlalchemy.orm import Session
 from models import Finca
 from schemas import FincaCreate, FincaUpdate
@@ -8,8 +7,7 @@ def crear_finca(db: Session, data: FincaCreate) -> Finca:
     finca = Finca(
         nombre=data.nombre.strip(),
         ubicacion=(data.ubicacion.strip() if data.ubicacion else None),
-        estado=(data.estado.strip() if data.estado else None),
-        owner=(data.owner.strip() if data.owner else None),
+        tamano_hectareas=data.tamano_hectareas,
     )
     db.add(finca)
     db.commit()
@@ -34,10 +32,8 @@ def actualizar_finca(db: Session, finca_id: int, data: FincaUpdate):
         finca.nombre = data.nombre.strip()
     if data.ubicacion is not None:
         finca.ubicacion = data.ubicacion.strip() if data.ubicacion else None
-    if data.estado is not None:
-        finca.estado = data.estado.strip() if data.estado else None
-    if data.owner is not None:
-        finca.owner = data.owner.strip() if data.owner else None
+    if data.tamano_hectareas is not None:
+        finca.tamano_hectareas = data.tamano_hectareas
 
     db.commit()
     db.refresh(finca)
