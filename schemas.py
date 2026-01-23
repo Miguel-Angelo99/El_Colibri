@@ -99,3 +99,39 @@ class RevisionResponse(RevisionCreate):
 
     class Config:
         from_attributes = True
+
+
+
+class TrabajadorBase(BaseModel):
+    nombre: str
+    apellido: str
+    dni: Optional[str] = None
+    telefono: Optional[str] = None
+    email: Optional[EmailStr] = None
+    fecha_ingreso: Optional[date] = None
+    puesto: Optional[str] = None
+    activo: Optional[bool] = True
+
+
+class TrabajadorCreate(TrabajadorBase):
+    pass
+
+
+class TrabajadorUpdate(BaseModel):
+    nombre: Optional[str] = None
+    apellido: Optional[str] = None
+    dni: Optional[str] = None
+    telefono: Optional[str] = None
+    email: Optional[EmailStr] = None
+    fecha_ingreso: Optional[date] = None
+    puesto: Optional[str] = None
+    activo: Optional[bool] = None
+
+
+class TrabajadorResponse(TrabajadorBase):
+    id: int
+    fecha_creacion: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
