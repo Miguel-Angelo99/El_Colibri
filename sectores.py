@@ -1,12 +1,9 @@
-# sectores.py
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from database import SessionLocal
 from schemas import SectorCreate, SectorUpdate, SectorResponse
-from crud_sectores import (
-    crear_sector, listar_sectores, obtener_sector, actualizar_sector, eliminar_sector
-)
+from crud_sectores import crear_sector, listar_sectores, obtener_sector, actualizar_sector, eliminar_sector
 
 router = APIRouter(prefix="/sectores", tags=["Sectores"])
 
