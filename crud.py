@@ -14,10 +14,11 @@ def crear_usuario(db: Session, usuario: UsuarioCreate) -> Usuario:
     nuevo = Usuario(
         email=usuario.email,
         password_hash=_hash_password(usuario.password),
-        role=UserRole.user,
+        role="user",
     )
     db.add(nuevo)
     db.commit()
     db.refresh(nuevo)
     return nuevo
+
 
