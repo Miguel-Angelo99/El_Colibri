@@ -8,7 +8,7 @@ from sectores import router as sectores_router
 from database import engine, SessionLocal
 from models import Base
 from schemas import UsuarioCreate, UsuarioResponse
-from crud import crear_usuario
+#from crud import crear_usuario
 
 from revisiones import router as revisiones_router
 
@@ -37,3 +37,4 @@ def crear(usuario: UsuarioCreate, db: Session = Depends(get_db)):
 @app.get("/")
 def root():
     return {"status": "ok"}
+
