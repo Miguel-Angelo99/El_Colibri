@@ -1,11 +1,13 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 
 from fincas import router as fincas_router
 from sectores import router as sectores_router
 from trabajadores import router as trabajadores_router
 from revisiones import router as revisiones_router
 
-app = FastAPI(title="El Colibri API")
+from auth_simple import require_api_key
+
+app = FastAPI(dependencies=[Depends(require_api_key)])
 
 # REGISTRAR ROUTERS
 app.include_router(fincas_router)
