@@ -22,9 +22,12 @@ starlette==0.50.0
 typing-inspection==0.4.2
 typing_extensions==4.15.0
 uvicorn==0.40.0
-opencv-python==4.10.0.84
+
+opencv-python-headless==4.10.0.84
+
 pyzbar==0.1.9
 numpy==2.1.3
+
 
 
 
