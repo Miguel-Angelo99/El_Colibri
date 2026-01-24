@@ -12,7 +12,7 @@ from imagenes import router as imagenes_router
 
 from auth_simple import require_api_key
 
-# ------------------------
+# ------------------------ oscar estuvo aqui
 # APP (API_KEY GLOBAL)
 # ------------------------
 app = FastAPI(
@@ -54,4 +54,5 @@ app.include_router(imagenes_router)
 @app.get("/")
 def root():
     return {"status": "ok"}
+
 
