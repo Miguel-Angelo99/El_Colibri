@@ -8,6 +8,8 @@ from revisiones import router as revisiones_router
 from usuarios import router as usuarios_router
 from catalogos import router as catalogos_router  # 👈 NUEVO
 
+from imagenes import router as imagenes_router
+
 from auth_simple import require_api_key
 
 # ------------------------
@@ -44,9 +46,12 @@ app.include_router(revisiones_router)
 app.include_router(usuarios_router)
 app.include_router(catalogos_router)  # 👈 CATÁLOGOS
 
+app.include_router(imagenes_router)
+
 # ------------------------
 # RUTA RAÍZ
 # ------------------------
 @app.get("/")
 def root():
     return {"status": "ok"}
+
