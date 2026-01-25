@@ -33,52 +33,50 @@ def procesar_zip_revision_local(
     Guarda:
       storage/revisiones/<revision_id>/original/<original>
       storage/revisiones/<revision_id>/renamed/001.jpg ...
-    Devuelve items:
+
+    Retorna:
       [{original_name, stored_name, rel_path, order_index}]
     """
-
     base_dir = Path(storage_root) / "revisiones" / str(revision_id)
     original_dir = base_dir / "original"
     renamed_dir = base_dir / "renamed"
     original_dir.mkdir(parents=True, exist_ok=True)
     renamed_dir.mkdir(parents=True, exist_ok=True)
 
-    # 1) Guardar ZIP a disco (sin cargar todo a RAM)
+    # 1) Guardar ZIP a disco (sin cargarlo completo a RAM)
     tmp_zip_path = base_dir / "upload.zip"
-
-    # Si el cliente manda content-length, ayuda; si no, igual procesamos por límites del zip internamente
     try:
         with tmp_zip_path.open("wb") as f:
             shutil.copyfileobj(zip_file.file, f)
     except Exception:
         raise HTTPException(status_code=400, detail="No se pudo guardar el ZIP")
 
-    # límite por tamaño del ZIP subido (en disco)
+    # límite por tamaño del ZIP
     try:
         if tmp_zip_path.stat().st_size > MAX_ZIP_SIZE:
             raise HTTPException(status_code=413, detail="ZIP demasiado grande")
     except FileNotFoundError:
         raise HTTPException(status_code=400, detail="ZIP inválido")
 
+    zf = None
     try:
-        # 2) Abrir ZIP y validar anti zip-bomb
+        # 2) Abrir ZIP
         try:
             zf = zipfile.ZipFile(tmp_zip_path)
         except Exception:
             raise HTTPException(status_code=400, detail="ZIP inválido o corrupto")
 
         infos = [i for i in zf.infolist() if not i.is_dir()]
-
-        if len(infos) == 0:
+        if not infos:
             raise HTTPException(status_code=400, detail="ZIP vacío")
         if len(infos) > MAX_FILES:
-            raise HTTPException(status_code=413, detail=f"Demasiados archivos en el ZIP (max {MAX_FILES})")
+            raise HTTPException(status_code=413, detail=f"Demasiados archivos (max {MAX_FILES})")
 
         total_uncompressed = sum(i.file_size for i in infos)
         if total_uncompressed > MAX_TOTAL_UNCOMPRESSED:
             raise HTTPException(status_code=413, detail="El contenido descomprimido excede el límite")
 
-        # 3) Filtrar solo imágenes permitidas y validar por archivo
+        # 3) Filtrar imágenes permitidas
         imgs = []
         for info in infos:
             if not _is_allowed(info.filename):
@@ -90,17 +88,17 @@ def procesar_zip_revision_local(
         if not imgs:
             raise HTTPException(status_code=400, detail="No hay imágenes válidas dentro del ZIP")
 
-        # 4) Validar cantidad esperada (si aplica)
+        # 4) Validar cantidad esperada
         if expected_count is not None and len(imgs) != expected_count:
             raise HTTPException(
                 status_code=400,
-                detail=f"Cantidad de fotos inválida. ZIP={len(imgs)} vs expected={expected_count}."
+                detail=f"Cantidad de fotos inválida. ZIP={len(imgs)} vs esperado={expected_count}"
             )
 
-        # 5) Extraer a original/ (controlando rutas)
-        extracted = []
-        imgs.sort(key=lambda x: x.filename)  # orden estable
+        imgs.sort(key=lambda x: x.filename)
 
+        # 5) Extraer a original/
+        extracted: list[tuple[str, Path]] = []
         for info in imgs:
             safe_name = _sanitize_filename(info.filename)
             target = original_dir / safe_name
@@ -108,7 +106,7 @@ def procesar_zip_revision_local(
                 shutil.copyfileobj(src, dst)
             extracted.append((safe_name, target))
 
-        # 6) Renombrar a 001..NNN (manteniendo extensión)
+        # 6) Renombrar a 001..NNN
         n = len(extracted)
         pad = max(3, len(str(n)))
 
@@ -117,6 +115,7 @@ def procesar_zip_revision_local(
             ext = orig_path.suffix.lower()
             stored_name = f"{idx:0{pad}d}{ext}"
             stored_path = renamed_dir / stored_name
+
             shutil.copy2(orig_path, stored_path)
 
             rel_path = str(Path("revisiones") / str(revision_id) / "renamed" / stored_name).replace("\\", "/")
@@ -131,7 +130,8 @@ def procesar_zip_revision_local(
 
     finally:
         try:
-            zf.close()
+            if zf:
+                zf.close()
         except Exception:
             pass
         try:
