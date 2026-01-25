@@ -5,6 +5,11 @@ from database import SessionLocal
 from schemas import RevisionCreate, RevisionResponse
 from crud_revisiones import crear_revision, listar_revisiones, obtener_revision, eliminar_revision
 
+from fastapi import UploadFile, File
+from services.zip_processor import procesar_zip_revision_local
+from crud_imagenes import guardar_imagenes_revision
+from crud_revisiones import obtener_revision
+
 router = APIRouter(prefix="/revisiones", tags=["Revisiones"])
 
 
@@ -48,3 +53,41 @@ def delete_revision(revision_id: int, db: Session = Depends(get_db)):
     if not ok:
         raise HTTPException(status_code=404, detail="Revisión no existe")
     return {"ok": True}
+
+
+
+@router.post("/{revision_id}/zip", response_model=dict)
+def upload_zip_revision(
+    revision_id: int,
+    zipfile: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    rev = obtener_revision(db, revision_id)
+    if not rev:
+        raise HTTPException(status_code=404, detail="Revisión no existe")
+
+    # ✅ Si quieres validar cantidad contra plantas del sector:
+    # - opción 1 (si tu revisión tiene plantas_esperadas): expected = getattr(rev, "plantas_esperadas", None)
+    # - opción 2 (si quieres contar plantas por sector): usa crud_plantas.count_plants_by_sector(...)
+    expected = getattr(rev, "plantas_esperadas", None)
+
+    items = procesar_zip_revision_local(
+        revision_id=revision_id,
+        zip_file=zipfile,
+        storage_root="storage",
+        expected_count=expected,
+    )
+
+    count = guardar_imagenes_revision(db, revision_id, items)
+
+    return {
+        "revision_id": revision_id,
+        "count": count,
+        "items": items,
+        "static_base": "/static",  # para que el front arme /static/<rel_path>
+    }
+
+
+
+
+
