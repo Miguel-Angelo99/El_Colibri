@@ -13,7 +13,7 @@ from imagenes import router as imagenes_router
 from auth_simple import require_api_key
 from fastapi.staticfiles import StaticFiles
 
-app.mount("/static", StaticFiles(directory="storage"), name="static")
+
 # ------------------------ oscar estuvo aqui
 # APP (API_KEY GLOBAL)
 # ------------------------
@@ -21,6 +21,8 @@ app = FastAPI(
     title="El Colibri API",
     dependencies=[Depends(require_api_key)]
 )
+app.mount("/static", StaticFiles(directory="storage"), name="static")
+
 
 # ------------------------
 # CORS
@@ -56,6 +58,4 @@ app.include_router(imagenes_router)
 @app.get("/")
 def root():
     return {"status": "ok"}
-
-
 
