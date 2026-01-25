@@ -220,3 +220,18 @@ class Trabajador(Base):
     fecha_creacion = Column(DateTime, server_default=func.now(), nullable=True)
 
     revisiones = relationship("Revision", secondary=revision_trabajador, back_populates="trabajadores")
+
+
+class RevisionImagen(Base):
+    __tablename__ = "revision_imagen"
+
+    id = Column(Integer, primary_key=True, index=True)
+    revision_id = Column(Integer, ForeignKey("revision.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    nombre_original = Column(String(255), nullable=False)
+    nombre_archivo = Column(String(255), nullable=False)
+    ruta = Column(String(512), nullable=False)
+    orden = Column(Integer, nullable=False)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
