@@ -5,7 +5,6 @@ from pathlib import Path
 import re
 from fastapi import HTTPException, UploadFile
 
-# --- Config de seguridad / límites (los mismos que ya usas) ---
 ALLOWED_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
 MAX_FILES = 1200
 MAX_TOTAL_UNCOMPRESSED = 2_000_000_000
@@ -18,7 +17,6 @@ def _is_allowed(name: str) -> bool:
     return Path(name.lower()).suffix in ALLOWED_EXTS
 
 def _sanitize_filename(name: str) -> str:
-    # evita rutas internas (zip slip) y caracteres raros
     name = name.replace("\\", "/").split("/")[-1]
     return SAFE_NAME_RE.sub("_", name)
 
@@ -27,11 +25,10 @@ def procesar_zip_revision_local(
     revision_id: int,
     zip_file: UploadFile,
     storage_root: str = "storage",
-    expected_count: int | None = None,
 ) -> list[dict]:
     """
-    Guarda:
-      storage/revisiones/<revision_id>/original/<original>
+    Extrae y renombra imágenes a local:
+      storage/revisiones/<revision_id>/original/<...>
       storage/revisiones/<revision_id>/renamed/001.jpg ...
 
     Retorna:
@@ -43,7 +40,6 @@ def procesar_zip_revision_local(
     original_dir.mkdir(parents=True, exist_ok=True)
     renamed_dir.mkdir(parents=True, exist_ok=True)
 
-    # 1) Guardar ZIP a disco (sin cargarlo completo a RAM)
     tmp_zip_path = base_dir / "upload.zip"
     try:
         with tmp_zip_path.open("wb") as f:
@@ -51,16 +47,11 @@ def procesar_zip_revision_local(
     except Exception:
         raise HTTPException(status_code=400, detail="No se pudo guardar el ZIP")
 
-    # límite por tamaño del ZIP
-    try:
-        if tmp_zip_path.stat().st_size > MAX_ZIP_SIZE:
-            raise HTTPException(status_code=413, detail="ZIP demasiado grande")
-    except FileNotFoundError:
-        raise HTTPException(status_code=400, detail="ZIP inválido")
+    if tmp_zip_path.stat().st_size > MAX_ZIP_SIZE:
+        raise HTTPException(status_code=413, detail="ZIP demasiado grande")
 
     zf = None
     try:
-        # 2) Abrir ZIP
         try:
             zf = zipfile.ZipFile(tmp_zip_path)
         except Exception:
@@ -76,7 +67,6 @@ def procesar_zip_revision_local(
         if total_uncompressed > MAX_TOTAL_UNCOMPRESSED:
             raise HTTPException(status_code=413, detail="El contenido descomprimido excede el límite")
 
-        # 3) Filtrar imágenes permitidas
         imgs = []
         for info in infos:
             if not _is_allowed(info.filename):
@@ -88,17 +78,9 @@ def procesar_zip_revision_local(
         if not imgs:
             raise HTTPException(status_code=400, detail="No hay imágenes válidas dentro del ZIP")
 
-        # 4) Validar cantidad esperada
-        if expected_count is not None and len(imgs) != expected_count:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cantidad de fotos inválida. ZIP={len(imgs)} vs esperado={expected_count}"
-            )
-
         imgs.sort(key=lambda x: x.filename)
 
-        # 5) Extraer a original/
-        extracted: list[tuple[str, Path]] = []
+        extracted = []
         for info in imgs:
             safe_name = _sanitize_filename(info.filename)
             target = original_dir / safe_name
@@ -106,16 +88,14 @@ def procesar_zip_revision_local(
                 shutil.copyfileobj(src, dst)
             extracted.append((safe_name, target))
 
-        # 6) Renombrar a 001..NNN
         n = len(extracted)
         pad = max(3, len(str(n)))
 
-        results: list[dict] = []
+        results = []
         for idx, (orig_name, orig_path) in enumerate(extracted, start=1):
             ext = orig_path.suffix.lower()
             stored_name = f"{idx:0{pad}d}{ext}"
             stored_path = renamed_dir / stored_name
-
             shutil.copy2(orig_path, stored_path)
 
             rel_path = str(Path("revisiones") / str(revision_id) / "renamed" / stored_name).replace("\\", "/")
