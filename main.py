@@ -20,8 +20,9 @@ from fastapi.staticfiles import StaticFiles
 app = FastAPI(
     title="El Colibri API",
     dependencies=[Depends(require_api_key)]
+    app.mount("/static", StaticFiles(directory="storage"), name="static")
 )
-app.mount("/static", StaticFiles(directory="storage"), name="static")
+
 
 
 # ------------------------
@@ -58,4 +59,5 @@ app.include_router(imagenes_router)
 @app.get("/")
 def root():
     return {"status": "ok"}
+
 
