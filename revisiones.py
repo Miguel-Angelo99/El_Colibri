@@ -4,7 +4,8 @@ from sqlalchemy.orm import Session
 from database import SessionLocal
 from schemas import RevisionCreate, RevisionResponse
 from crud_revisiones import crear_revision, listar_revisiones, obtener_revision, eliminar_revision
-from services.zip_processor import procesar_zip_revision_local
+
+from services.zip_revision_local import procesar_zip_revision_local
 from crud_imagenes import guardar_imagenes_revision
 
 router = APIRouter(prefix="/revisiones", tags=["Revisiones"])
@@ -52,7 +53,7 @@ def delete_revision(revision_id: int, db: Session = Depends(get_db)):
     return {"ok": True}
 
 
-# ✅ ZIP: subir, renombrar y registrar (LOCAL)
+
 @router.post("/{revision_id}/zip", response_model=dict)
 def upload_zip_revision(
     revision_id: int,
@@ -63,14 +64,10 @@ def upload_zip_revision(
     if not rev:
         raise HTTPException(status_code=404, detail="Revisión no existe")
 
-    # Si tu modelo Revision tiene plantas_esperadas, úsalo; si no existe, será None y no valida cantidad.
-    expected = getattr(rev, "plantas_esperadas", None)
-
     items = procesar_zip_revision_local(
         revision_id=revision_id,
         zip_file=zipfile,
         storage_root="storage",
-        expected_count=expected,
     )
 
     count = guardar_imagenes_revision(db, revision_id, items)
