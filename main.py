@@ -13,7 +13,9 @@ from imagenes import router as imagenes_router
 
 from auth_simple import require_api_key
 
-# ✅ Crear carpeta storage para que StaticFiles no falle en deploy
+# ------------------------
+# Crear carpeta storage para StaticFiles
+# ------------------------
 Path("storage").mkdir(parents=True, exist_ok=True)
 
 # ------------------------
@@ -24,23 +26,25 @@ app = FastAPI(
     dependencies=[Depends(require_api_key)]
 )
 
-# ✅ Montar estáticos DESPUÉS de crear app
+# ------------------------
+# Montar estáticos DESPUÉS de crear app
+# ------------------------
 app.mount("/static", StaticFiles(directory="storage"), name="static")
 
 # ------------------------
 # CORS
 # ------------------------
 origins = [
-    "http://localhost:5173/",
-    "https://elcolibriapp.vercel.app/",
+    "http://localhost:5173",
+    "https://elcolibriapp.vercel.app",
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=origins,  # Orígenes permitidos
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["*"],    # Permite GET, POST, PUT, DELETE, OPTIONS, etc.
+    allow_headers=["*"],    # Permite todos los headers (incluyendo x-api-key)
 )
 
 # ------------------------
