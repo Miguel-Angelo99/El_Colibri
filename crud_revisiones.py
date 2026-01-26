@@ -19,7 +19,7 @@ def crear_revision(db: Session, data: RevisionCreate):
         sector_id=data.sector_id,
         fecha_revision=data.fecha_revision,
         tipo=data.tipo,  # SQLAlchemy Enum acepta el string value
-        observaciones=data.observaciones,
+        #observaciones=data.observaciones,
         comentario=data.comentario,
         usuario_id=data.usuario_id,
     )
@@ -53,3 +53,4 @@ def eliminar_revision(db: Session, revision_id: int) -> bool:
     db.delete(rev)
     db.commit()
     return True
+
