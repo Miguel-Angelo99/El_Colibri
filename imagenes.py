@@ -1,23 +1,30 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Form
 import io, zipfile
 import requests
 import numpy as np
 import cv2
 import zxingcpp
-from typing import List
+from typing import List, Optional
 
 router = APIRouter(prefix="/imagenes", tags=["Imagenes"])
 
+# ----------------------------
+# CONFIGURACIÓN
+# ----------------------------
 DEBUG_SAVE = True
 ALLOWED_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
 MAX_FILES = 1200
 MAX_TOTAL_UNCOMPRESSED = 2_000_000_000
 MAX_SINGLE_FILE_UNCOMPRESSED = 25_000_000
 MAX_ZIP_SIZE = 2_000_000_000
+BATCH_SIZE = 400  # Procesar en lotes de 400
 
-# URL de tu Worker (usa POST directo)
+# URL del Worker
 WORKER_UPLOAD_URL = "https://floral-dawn-a37d.omarhgd34.workers.dev"
 
+# ----------------------------
+# FUNCIONES AUXILIARES
+# ----------------------------
 def _is_allowed(name: str) -> bool:
     return any(name.lower().endswith(ext) for ext in ALLOWED_EXTS)
 
@@ -30,16 +37,12 @@ def _decode_qr_from_bytes(img_bytes: bytes) -> List[str]:
     results = zxingcpp.read_barcodes(img_rgb)
     return [r.text for r in results if r.text]
 
-def upload_to_worker(filename: str, img_bytes: bytes, folder: str = None) -> str:
+def upload_to_worker(filename: str, img_bytes: bytes, folder: Optional[str] = None) -> str:
     """
     Envía la imagen al Worker y obtiene el 'key' (ruta con carpeta) donde se guardó en R2.
     """
-    files = {
-        "file": (filename, img_bytes, "image/jpeg")
-    }
-    data = {}
-    if folder:
-        data["carpeta"] = folder  # <- Aquí le pasas la “carpeta”
+    files = {"file": (filename, img_bytes, "image/jpeg")}
+    data = {"carpeta": folder} if folder else {}
 
     try:
         resp = requests.post(WORKER_UPLOAD_URL, files=files, data=data, timeout=60)
@@ -49,8 +52,18 @@ def upload_to_worker(filename: str, img_bytes: bytes, folder: str = None) -> str
         print(f"Error subiendo {filename} al worker:", e)
         return ""
 
+# ----------------------------
+# ENDPOINT PRINCIPAL
+# ----------------------------
 @router.post("/leer-qr-zip")
-async def leer_qr_zip(file: UploadFile = File(...)):
+async def leer_qr_zip(
+    file: UploadFile = File(...),
+    revision_id: int = Form(...)
+):
+    """
+    Procesa un ZIP de imágenes, detecta QR y las sube a R2 en la carpeta:
+    revisiones/revisiones_imgs/revision_{revision_id}/
+    """
     if not (file.filename or "").lower().endswith(".zip"):
         raise HTTPException(status_code=400, detail="Debe subir un archivo ZIP")
 
@@ -74,56 +87,65 @@ async def leer_qr_zip(file: UploadFile = File(...)):
     resultados = []
     leidas = omitidas = errores = 0
 
-    for info in sorted(infos, key=lambda x: x.filename):
-        name = info.filename
+    # Carpeta dinámica para R2 según el ID de la revisión
+    carpeta_revision = f"revisiones/revisiones_imgs/revision_{revision_id}"
 
-        if not _is_allowed(name):
-            omitidas += 1
-            continue
+    # ----------------------------
+    # Procesar en lotes de BATCH_SIZE
+    # ----------------------------
+    for i in range(0, len(infos), BATCH_SIZE):
+        lote = infos[i:i+BATCH_SIZE]
 
-        if info.file_size > MAX_SINGLE_FILE_UNCOMPRESSED:
-            errores += 1
-            resultados.append({
-                "archivo": name,
-                "ok": False,
-                "qr": [],
-                "error": "Imagen demasiado grande"
-            })
-            continue
+        for info in lote:
+            name = info.filename
 
-        try:
-            img_bytes = zf.read(info)
+            if not _is_allowed(name):
+                omitidas += 1
+                continue
 
-            url_key = ""
-            if DEBUG_SAVE:
-                safe_name = name.replace("/", "_")
-                # Envía al Worker y pide que lo guarde dentro de la carpeta "debug_qr"
-                url_key = upload_to_worker(safe_name, img_bytes, folder="debug_qr")
+            if info.file_size > MAX_SINGLE_FILE_UNCOMPRESSED:
+                errores += 1
+                resultados.append({
+                    "archivo": name,
+                    "ok": False,
+                    "qr": [],
+                    "error": "Imagen demasiado grande"
+                })
+                continue
 
-            qrs = _decode_qr_from_bytes(img_bytes)
+            try:
+                img_bytes = zf.read(info)
 
-            resultados.append({
-                "archivo": name,
-                "ok": bool(qrs),
-                "qr": qrs,
-                "key_de_r2": url_key  # Aquí recibes la “ruta con carpeta” de R2
-            })
-            leidas += 1
+                url_key = ""
+                if DEBUG_SAVE:
+                    safe_name = name.replace("/", "_")
+                    # Guardar en R2 dentro de la carpeta dinámica de la revisión
+                    url_key = upload_to_worker(safe_name, img_bytes, folder=carpeta_revision)
 
-        except Exception:
-            errores += 1
-            resultados.append({
-                "archivo": name,
-                "ok": False,
-                "qr": [],
-                "error": "Error procesando"
-            })
+                qrs = _decode_qr_from_bytes(img_bytes)
+
+                resultados.append({
+                    "archivo": name,
+                    "ok": bool(qrs),
+                    "qr": qrs,
+                    "key_de_r2": url_key
+                })
+                leidas += 1
+
+            except Exception:
+                errores += 1
+                resultados.append({
+                    "archivo": name,
+                    "ok": False,
+                    "qr": [],
+                    "error": "Error procesando"
+                })
 
     return {
+        "revision_id": revision_id,
         "total_archivos_en_zip": len(infos),
         "imagenes_leidas": leidas,
         "imagenes_omitidas": omitidas,
         "imagenes_con_error": errores,
         "resultados": resultados
     }
-
