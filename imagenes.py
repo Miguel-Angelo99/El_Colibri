@@ -1,142 +1,124 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException
-import io
+import io, zipfile
+import requests
 import numpy as np
 import cv2
 import zxingcpp
-import zipfile
-from pathlib import Path
+from typing import List
 
 router = APIRouter(prefix="/imagenes", tags=["Imagenes"])
 
-# ------------------------
-# CONFIG DEBUG LOCAL
-# ------------------------
-DEBUG_SAVE = True  # ⚠️ poner False en producción
-DEBUG_DIR = Path("storage/debug_qr")
-DEBUG_DIR.mkdir(parents=True, exist_ok=True)
-
-# ------------------------
-# CONFIG SEGURIDAD / LÍMITES
-# ------------------------
+DEBUG_SAVE = True
 ALLOWED_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
 MAX_FILES = 1200
-MAX_TOTAL_UNCOMPRESSED = 2_000_000_000      # 2GB
-MAX_SINGLE_FILE_UNCOMPRESSED = 25_000_000   # 25MB
-MAX_ZIP_SIZE = 2_000_000_000                # 2GB
+MAX_TOTAL_UNCOMPRESSED = 2_000_000_000
+MAX_SINGLE_FILE_UNCOMPRESSED = 25_000_000
+MAX_ZIP_SIZE = 2_000_000_000
 
-# ------------------------
-# HELPERS
-# ------------------------
+# URL de tu Worker (usa POST directo)
+WORKER_UPLOAD_URL = "https://floral-dawn-a37d.omarhgd34.workers.dev"
+
 def _is_allowed(name: str) -> bool:
-    n = name.lower()
-    return any(n.endswith(ext) for ext in ALLOWED_EXTS)
+    return any(name.lower().endswith(ext) for ext in ALLOWED_EXTS)
 
-def _decode_qr_from_bytes(img_bytes: bytes) -> list[str]:
+def _decode_qr_from_bytes(img_bytes: bytes) -> List[str]:
     np_img = np.frombuffer(img_bytes, np.uint8)
     img = cv2.imdecode(np_img, cv2.IMREAD_COLOR)
     if img is None:
         return []
-
     img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     results = zxingcpp.read_barcodes(img_rgb)
     return [r.text for r in results if r.text]
 
-# ------------------------
-# ENDPOINT
-# ------------------------
+def upload_to_worker(filename: str, img_bytes: bytes, folder: str = None) -> str:
+    """
+    Envía la imagen al Worker y obtiene el 'key' (ruta con carpeta) donde se guardó en R2.
+    """
+    files = {
+        "file": (filename, img_bytes, "image/jpeg")
+    }
+    data = {}
+    if folder:
+        data["carpeta"] = folder  # <- Aquí le pasas la “carpeta”
+
+    try:
+        resp = requests.post(WORKER_UPLOAD_URL, files=files, data=data, timeout=60)
+        resp.raise_for_status()
+        return resp.json().get("key", "")
+    except Exception as e:
+        print(f"Error subiendo {filename} al worker:", e)
+        return ""
+
 @router.post("/leer-qr-zip")
 async def leer_qr_zip(file: UploadFile = File(...)):
-    # 1️⃣ Validar ZIP
-    filename = (file.filename or "").lower()
-    if not filename.endswith(".zip"):
-        raise HTTPException(status_code=400, detail="Debe subir un archivo .zip")
+    if not (file.filename or "").lower().endswith(".zip"):
+        raise HTTPException(status_code=400, detail="Debe subir un archivo ZIP")
 
-    # 2️⃣ Leer ZIP en memoria
     content = await file.read()
     if len(content) > MAX_ZIP_SIZE:
         raise HTTPException(status_code=413, detail="ZIP demasiado grande")
 
-    # 3️⃣ Abrir ZIP
     try:
         zf = zipfile.ZipFile(io.BytesIO(content))
     except Exception:
-        raise HTTPException(status_code=400, detail="ZIP inválido o corrupto")
+        raise HTTPException(status_code=400, detail="ZIP inválido")
 
     infos = [i for i in zf.infolist() if not i.is_dir()]
-
     if not infos:
         raise HTTPException(status_code=400, detail="ZIP vacío")
     if len(infos) > MAX_FILES:
-        raise HTTPException(
-            status_code=413,
-            detail=f"Demasiados archivos en el ZIP (max {MAX_FILES})"
-        )
+        raise HTTPException(status_code=413, detail="Demasiados archivos")
+    if sum(i.file_size for i in infos) > MAX_TOTAL_UNCOMPRESSED:
+        raise HTTPException(status_code=413, detail="Contenido descomprimido demasiado grande")
 
-    total_uncompressed = sum(i.file_size for i in infos)
-    if total_uncompressed > MAX_TOTAL_UNCOMPRESSED:
-        raise HTTPException(
-            status_code=413,
-            detail="El contenido descomprimido excede el límite"
-        )
-
-    # ------------------------
-    # PROCESAMIENTO
-    # ------------------------
     resultados = []
-    leidas = 0
-    omitidas = 0
-    errores = 0
+    leidas = omitidas = errores = 0
 
-    infos.sort(key=lambda x: x.filename)
-
-    for info in infos:
+    for info in sorted(infos, key=lambda x: x.filename):
         name = info.filename
 
-        # Saltar archivos no permitidos
         if not _is_allowed(name):
             omitidas += 1
             continue
 
         if info.file_size > MAX_SINGLE_FILE_UNCOMPRESSED:
+            errores += 1
             resultados.append({
                 "archivo": name,
-                "qr": [],
                 "ok": False,
+                "qr": [],
                 "error": "Imagen demasiado grande"
             })
-            errores += 1
             continue
 
         try:
             img_bytes = zf.read(info)
 
-            # 🟢 GUARDAR EN LOCAL (DEBUG)
+            url_key = ""
             if DEBUG_SAVE:
                 safe_name = name.replace("/", "_")
-                with open(DEBUG_DIR / safe_name, "wb") as f:
-                    f.write(img_bytes)
+                # Envía al Worker y pide que lo guarde dentro de la carpeta "debug_qr"
+                url_key = upload_to_worker(safe_name, img_bytes, folder="debug_qr")
 
             qrs = _decode_qr_from_bytes(img_bytes)
 
             resultados.append({
                 "archivo": name,
+                "ok": bool(qrs),
                 "qr": qrs,
-                "ok": bool(qrs)
+                "key_de_r2": url_key  # Aquí recibes la “ruta con carpeta” de R2
             })
             leidas += 1
 
         except Exception:
+            errores += 1
             resultados.append({
                 "archivo": name,
-                "qr": [],
                 "ok": False,
-                "error": "No se pudo procesar"
+                "qr": [],
+                "error": "Error procesando"
             })
-            errores += 1
 
-    # ------------------------
-    # RESPUESTA
-    # ------------------------
     return {
         "total_archivos_en_zip": len(infos),
         "imagenes_leidas": leidas,
